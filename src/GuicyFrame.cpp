@@ -2,6 +2,8 @@
 
 #include <wx/event.h>
 #include <wx/gdicmn.h>
+#include <wx/combobox.h>
+#include <wx/radiobut.h>
 #include <wx/panel.h>
 #include <wx/sizer.h>
 #include <wx/string.h>
@@ -19,7 +21,12 @@ GuicyFrame::GuicyFrame(const wxString& title) : wxFrame(nullptr, wxID_ANY, title
     auto* batchTargetML =
         new wxSpinCtrlDouble(batchSizer->GetStaticBox(), wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 0.0, 10000.0, 30.0, 1.0);
 
-    batchSizer->Add(batchTargetML, 1, wxEXPAND, 0);
+    wxString nicStrOpts[] = {"Volume (%)", "Weight (mg/ml)"};
+    auto* nicStrSel =
+        new wxComboBox(batchSizer->GetStaticBox(), wxID_ANY, nicStrOpts[1], wxDefaultPosition, wxDefaultSize, 2, nicStrOpts);
+
+    batchSizer->Add(batchTargetML, 1, wxEXPAND | wxALL, 5);
+    batchSizer->Add(nicStrSel, 1, wxEXPAND | wxALL, 5);
 
     auto* nicSizer = new wxStaticBoxSizer(wxVERTICAL, rootPanel, "Base");
     auto* targetSizer = new wxStaticBoxSizer(wxVERTICAL, rootPanel, "Target");
