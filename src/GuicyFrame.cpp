@@ -1,5 +1,9 @@
 #include "GuicyFrame.hpp"
 
+#include <filesystem>
+#include <utility>
+#include <string>
+
 #include <wx/event.h>
 #include <wx/gdicmn.h>
 #include <wx/combobox.h>
@@ -11,13 +15,44 @@
 #include <wx/spinctrl.h>
 #include <wx/statbox.h>
 #include <wx/stattext.h>
-#include <wx/stringimpl.h>
 #include <wx/dataview.h>
 #include <wx/button.h>
 #include <wx/vector.h>
+#include <wx/menu.h>
+#include <wx/filedlg.h>
+#include <wx/msgdlg.h>
+
+#include <rz/rzutils.hpp>
+
+#include "Save.hpp"
+#include "rz/json/json.hpp"
+
+constexpr double BATCHVOL_DEFAULT = 60.0;
+
+constexpr double NICSTR_DEFAULT = 10.0;
+constexpr double NICVG_DEFAULT = 0.0;
+constexpr double NICPG_DEFAULT = 100.0;
+constexpr int NICUNIT_DEFAULT = std::to_underlying(NicUnit::WEIGHT);
+
+constexpr double TARGETSTR_DEFAULT = 3.0;
+constexpr double TARGETVG_DEFAULT = 70.0;
+constexpr double TARGETPG_DEFAULT = 30.0;
 
 GuicyFrame::GuicyFrame(const wxString& title) : wxFrame(nullptr, wxID_ANY, title)
 {
+
+    auto* menuBar = new wxMenuBar();
+    auto* fileMenu = new wxMenu();
+
+    fileMenu->Append(wxID_OPEN, "&Open\tCtrl-O", "Local a saved recipe");
+    fileMenu->Append(wxID_SAVE, "&Save\tCtrl-S", "Save the current recipe");
+    fileMenu->Append(wxID_SAVEAS, "Save &As..\tCtrl-Shift-S", "Save recipe as a new file");
+
+    fileMenu->AppendSeparator();
+    fileMenu->Append(wxID_EXIT, "E&xit\tAlt-X", "Quit the application");
+
+    menuBar->Append(fileMenu, "&File");
+    this->SetMenuBar(menuBar);
 
     auto lblCtrl = [](wxWindow* parent, const wxString& labelText, wxWindow* control) -> wxBoxSizer*
         {
@@ -36,22 +71,27 @@ GuicyFrame::GuicyFrame(const wxString& title) : wxFrame(nullptr, wxID_ANY, title
     auto* batchSizer = new wxStaticBoxSizer(wxVERTICAL, rootPanel, "Batch");
 
     auto* batchTargetML =
-        new wxSpinCtrlDouble(batchSizer->GetStaticBox(), wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 0.0, 10000.0, 30.0, 1.0);
+        new wxSpinCtrlDouble(batchSizer->GetStaticBox(), wxID_ANY, wxEmptyString, wxDefaultPosition,
+            wxDefaultSize, wxSP_ARROW_KEYS, 0.0, 10000.0, BATCHVOL_DEFAULT, 1.0);
 
     wxString nicStrOpts[] = {"Volume (%)", "Weight (mg/mL)"};
     auto* nicStrSel =
-        new wxComboBox(batchSizer->GetStaticBox(), wxID_ANY, nicStrOpts[1], wxDefaultPosition, wxDefaultSize, 2, nicStrOpts, wxCB_READONLY);
+        new wxComboBox(batchSizer->GetStaticBox(), wxID_ANY, nicStrOpts[NICUNIT_DEFAULT],
+            wxDefaultPosition, wxDefaultSize, 2, nicStrOpts, wxCB_READONLY);
 
     batchSizer->Add(lblCtrl(batchSizer->GetStaticBox(), "Target mL", batchTargetML), 1, wxEXPAND | wxALL, 5);
     batchSizer->Add(lblCtrl(batchSizer->GetStaticBox(), "Nic Strength Unit", nicStrSel), 1, wxEXPAND | wxALL, 5);
 
     auto* nicSizer = new wxStaticBoxSizer(wxVERTICAL, rootPanel, "Base");
     auto* nicStrVal =
-        new wxSpinCtrlDouble(nicSizer->GetStaticBox(), wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 0.0, 100.0, 10.0, 1.0);
+        new wxSpinCtrlDouble(nicSizer->GetStaticBox(), wxID_ANY, wxEmptyString, wxDefaultPosition,
+            wxDefaultSize, wxSP_ARROW_KEYS, 0.0, 100.0, NICSTR_DEFAULT, 1.0);
     auto* nicVGVal =
-        new wxSpinCtrlDouble(nicSizer->GetStaticBox(), wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 0.0, 100.0, 0.0, 1.0);
+        new wxSpinCtrlDouble(nicSizer->GetStaticBox(), wxID_ANY, wxEmptyString, wxDefaultPosition,
+            wxDefaultSize, wxSP_ARROW_KEYS, 0.0, 100.0, NICVG_DEFAULT, 1.0);
     auto* nicPGVal =
-        new wxSpinCtrlDouble(nicSizer->GetStaticBox(), wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 0.0, 100.0, 100.0, 1.0);
+        new wxSpinCtrlDouble(nicSizer->GetStaticBox(), wxID_ANY, wxEmptyString, wxDefaultPosition,
+            wxDefaultSize, wxSP_ARROW_KEYS, 0.0, 100.0, NICPG_DEFAULT, 1.0);
 
     auto nicVGPG_EVT = [nicVGVal, nicPGVal](wxSpinDoubleEvent& event) -> void
         {
@@ -71,11 +111,14 @@ GuicyFrame::GuicyFrame(const wxString& title) : wxFrame(nullptr, wxID_ANY, title
 
     auto* targetSizer = new wxStaticBoxSizer(wxVERTICAL, rootPanel, "Target");
     auto* targetStrVal =
-        new wxSpinCtrlDouble(targetSizer->GetStaticBox(), wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 0.0, 100.0, 10.0, 1.0);
+        new wxSpinCtrlDouble(targetSizer->GetStaticBox(), wxID_ANY, wxEmptyString, wxDefaultPosition,
+            wxDefaultSize, wxSP_ARROW_KEYS, 0.0, 100.0, TARGETSTR_DEFAULT, 1.0);
     auto* targetVGVal =
-        new wxSpinCtrlDouble(targetSizer->GetStaticBox(), wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 0.0, 100.0, 70.0, 1.0);
+        new wxSpinCtrlDouble(targetSizer->GetStaticBox(), wxID_ANY, wxEmptyString, wxDefaultPosition,
+            wxDefaultSize, wxSP_ARROW_KEYS, 0.0, 100.0, TARGETVG_DEFAULT, 1.0);
     auto* targetPGVal =
-        new wxSpinCtrlDouble(targetSizer->GetStaticBox(), wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 0.0, 100.0, 30.0, 1.0);
+        new wxSpinCtrlDouble(targetSizer->GetStaticBox(), wxID_ANY, wxEmptyString, wxDefaultPosition,
+            wxDefaultSize, wxSP_ARROW_KEYS, 0.0, 100.0, TARGETPG_DEFAULT, 1.0);
 
     auto targetVGPG_EVT = [targetVGVal, targetPGVal](wxSpinDoubleEvent& event) -> void
         {
@@ -150,4 +193,110 @@ GuicyFrame::GuicyFrame(const wxString& title) : wxFrame(nullptr, wxID_ANY, title
 
     rootPanel->SetSizerAndFit(paddingSizer);
     paddingSizer->SetSizeHints(this);
+
+    auto loadFromSave = [=](const SaveData& saveData) -> void {
+        batchTargetML->SetValue(saveData.targetVol);
+        nicStrSel->SetValue(nicStrOpts[std::to_underlying(saveData.nicUnit)]);
+        nicStrVal->SetValue(saveData.nicStr);
+        nicVGVal->SetValue(saveData.nicVG);
+        nicPGVal->SetValue(saveData.nicPG);
+        targetStrVal->SetValue(saveData.targetStr);
+        targetVGVal->SetValue(saveData.targetVG);
+        targetPGVal->SetValue(saveData.targetPG);
+
+        for(const auto& flavour : saveData.flavours)
+        {
+            flavoursList->AppendItem({flavour.name, wxString::Format("%.2f", flavour.percent)});
+        }
+
+    };
+
+    auto saveFromWidgets = [=]() -> SaveData {
+        SaveData data;
+        data.targetVol = batchTargetML->GetValue();
+        data.nicUnit = nicStrSel->GetValue() == nicStrOpts[std::to_underlying(NicUnit::VOLUME)] ?
+            NicUnit::VOLUME : NicUnit::WEIGHT;
+        data.nicStr = nicStrVal->GetValue();
+        data.nicVG = nicVGVal->GetValue();
+        data.nicPG = nicPGVal->GetValue();
+        data.targetStr = targetStrVal->GetValue();
+        data.targetVG = targetVGVal->GetValue();
+        data.targetPG = targetPGVal->GetValue();
+
+        for(int row = 0; row < flavoursList->GetItemCount(); row++){
+            FlavourData flav;
+            flav.name = flavoursList->GetTextValue(row, 0).ToStdString();
+            wxString percent = flavoursList->GetTextValue(row, 1);
+            percent.ToDouble(&flav.percent);
+            data.flavours.push_back(flav);
+        }
+
+        return data;
+    };
+
+    auto clearWidgets = [=]() -> void {
+        batchTargetML->SetValue(BATCHVOL_DEFAULT);
+        nicStrSel->SetValue(nicStrOpts[NICUNIT_DEFAULT]);
+        nicStrVal->SetValue(NICSTR_DEFAULT);
+        nicVGVal->SetValue(NICVG_DEFAULT);
+        nicPGVal->SetValue(NICPG_DEFAULT);
+        targetStrVal->SetValue(TARGETSTR_DEFAULT);
+        targetVGVal->SetValue(TARGETVG_DEFAULT);
+        targetPGVal->SetValue(TARGETPG_DEFAULT);
+        flavoursList->DeleteAllItems();
+    };
+
+    this->Bind(wxEVT_MENU, [this, clearWidgets, loadFromSave](wxCommandEvent& event){
+        wxFileDialog openFileDlg(this, "Open Recipe File", "", "",
+            "Recipe files (*.rcp)|*.rcp|All files (*.*)|*.*", wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+
+        if(openFileDlg.ShowModal() == wxID_CANCEL)
+            return;
+
+        std::filesystem::path filePath(openFileDlg.GetPath().ToStdString());
+        auto saveData = rz::LoadObjectFromJsonFile_OBJ<SaveData>(filePath, [](const std::string& error){
+            wxMessageBox(error, "Load Error", wxOK | wxICON_ERROR);
+        });
+
+        if(!saveData)
+            return;
+
+        currentSavePath = filePath;
+        clearWidgets();
+
+        loadFromSave(*saveData);
+
+    }, wxID_OPEN);
+
+    auto saveFn = [this, saveFromWidgets](const std::filesystem::path& path){
+        rz::WriteObjToJsonFile(saveFromWidgets(), *currentSavePath, 0, [](const std::string& error){
+            wxMessageBox(error, "Save Error", wxOK | wxICON_ERROR);
+        });
+    };
+
+    this->Bind(wxEVT_MENU, [this, saveFn](wxCommandEvent& event){
+        if(currentSavePath){
+            saveFn(*currentSavePath);
+        } else {
+            wxCommandEvent saveas(wxEVT_MENU, wxID_SAVEAS);
+            this->GetEventHandler()->ProcessEvent(saveas);
+        }
+    }, wxID_SAVE);
+
+    this->Bind(wxEVT_MENU, [this, saveFn](wxCommandEvent& event){
+        wxFileDialog saveFileDlg(this, "Save Recipe As", "", "",
+            "Recipe files (*.rcp)|*.rcp|All files (*.*)|*.*", wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+
+        if(saveFileDlg.ShowModal() == wxID_CANCEL)
+            return;
+
+        currentSavePath = saveFileDlg.GetPath().ToStdString();
+        saveFn(*currentSavePath);
+
+    }, wxID_SAVEAS);
+
+    this->Bind(wxEVT_MENU, [this](wxCommandEvent& event){
+        this->Close(true);
+    }, wxID_EXIT);
+
 }
