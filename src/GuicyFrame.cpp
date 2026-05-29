@@ -21,6 +21,8 @@
 #include <wx/menu.h>
 #include <wx/filedlg.h>
 #include <wx/msgdlg.h>
+#include <wx/textctrl.h>
+#include <wx/font.h>
 
 #include <rz/rzutils.hpp>
 
@@ -28,6 +30,7 @@
 #include "rz/json/json.hpp"
 
 constexpr double BATCHVOL_DEFAULT = 60.0;
+constexpr const char* BATCHNAME_DEFAULT = "Untitled Recipe";
 
 constexpr double NICSTR_DEFAULT = 10.0;
 constexpr double NICVG_DEFAULT = 0.0;
@@ -70,6 +73,10 @@ GuicyFrame::GuicyFrame(const wxString& title) : wxFrame(nullptr, wxID_ANY, title
     auto* leftColSizer = new wxBoxSizer(wxVERTICAL);
     auto* batchSizer = new wxStaticBoxSizer(wxVERTICAL, rootPanel, "Batch");
 
+    auto* recipeNameVal =
+        new wxTextCtrl(batchSizer->GetStaticBox(), wxID_ANY, BATCHNAME_DEFAULT,
+           wxDefaultPosition, wxDefaultSize, wxTE_CAPITALIZE);
+
     auto* batchTargetML =
         new wxSpinCtrlDouble(batchSizer->GetStaticBox(), wxID_ANY, wxEmptyString, wxDefaultPosition,
             wxDefaultSize, wxSP_ARROW_KEYS, 0.0, 10000.0, BATCHVOL_DEFAULT, 1.0);
@@ -79,6 +86,7 @@ GuicyFrame::GuicyFrame(const wxString& title) : wxFrame(nullptr, wxID_ANY, title
         new wxComboBox(batchSizer->GetStaticBox(), wxID_ANY, nicStrOpts[NICUNIT_DEFAULT],
             wxDefaultPosition, wxDefaultSize, 2, nicStrOpts, wxCB_READONLY);
 
+    batchSizer->Add(recipeNameVal, 1, wxEXPAND | wxALL, 5);
     batchSizer->Add(lblCtrl(batchSizer->GetStaticBox(), "Target mL", batchTargetML), 1, wxEXPAND | wxALL, 5);
     batchSizer->Add(lblCtrl(batchSizer->GetStaticBox(), "Nic Strength Unit", nicStrSel), 1, wxEXPAND | wxALL, 5);
 
@@ -182,11 +190,27 @@ GuicyFrame::GuicyFrame(const wxString& title) : wxFrame(nullptr, wxID_ANY, title
 
     auto* submitBtn = new wxButton(rootPanel, wxID_ANY, "Submit");
 
+    auto* resultsSizer = new wxStaticBoxSizer(wxVERTICAL, rootPanel, "Final Recipe");
+    auto* resultsText = new wxTextCtrl(resultsSizer->GetStaticBox(), wxID_ANY, wxEmptyString,
+        wxDefaultPosition, wxSize(-1, 200), wxTE_MULTILINE | wxTE_READONLY | wxTE_DONTWRAP);
+
+    {
+        wxFont monoFont = wxFontInfo(11).Family(wxFONTFAMILY_TELETYPE);
+        resultsText->SetFont(monoFont);
+    }
+
+    submitBtn->Bind(wxEVT_BUTTON, [=](wxCommandEvent& event){
+
+    });
+
+    resultsSizer->Add(resultsText, 1, wxEXPAND | wxALL, 5);
+
     rightColSizer->Add(flavoursSizer, 1, wxEXPAND, 0);
     rightColSizer->Add(submitBtn, 0, wxEXPAND | wxTOP, 5);
 
     rootSizer->Add(leftColSizer, 1, wxEXPAND | wxRIGHT, 15);
     rootSizer->Add(rightColSizer, 1, wxEXPAND, 0);
+    rootSizer->Add(resultsSizer, 1, wxEXPAND, 0);
 
     auto* paddingSizer = new wxBoxSizer(wxVERTICAL);
     paddingSizer->Add(rootSizer, 1, wxEXPAND | wxALL, 20);
@@ -195,6 +219,7 @@ GuicyFrame::GuicyFrame(const wxString& title) : wxFrame(nullptr, wxID_ANY, title
     paddingSizer->SetSizeHints(this);
 
     auto loadFromSave = [=](const SaveData& saveData) -> void {
+        recipeNameVal->SetValue(saveData.name);
         batchTargetML->SetValue(saveData.targetVol);
         nicStrSel->SetValue(nicStrOpts[std::to_underlying(saveData.nicUnit)]);
         nicStrVal->SetValue(saveData.nicStr);
@@ -213,6 +238,7 @@ GuicyFrame::GuicyFrame(const wxString& title) : wxFrame(nullptr, wxID_ANY, title
 
     auto saveFromWidgets = [=]() -> SaveData {
         SaveData data;
+        data.name = recipeNameVal->GetValue().ToStdString();
         data.targetVol = batchTargetML->GetValue();
         data.nicUnit = nicStrSel->GetValue() == nicStrOpts[std::to_underlying(NicUnit::VOLUME)] ?
             NicUnit::VOLUME : NicUnit::WEIGHT;
@@ -235,6 +261,7 @@ GuicyFrame::GuicyFrame(const wxString& title) : wxFrame(nullptr, wxID_ANY, title
     };
 
     auto clearWidgets = [=]() -> void {
+        recipeNameVal->SetValue(BATCHNAME_DEFAULT);
         batchTargetML->SetValue(BATCHVOL_DEFAULT);
         nicStrSel->SetValue(nicStrOpts[NICUNIT_DEFAULT]);
         nicStrVal->SetValue(NICSTR_DEFAULT);
