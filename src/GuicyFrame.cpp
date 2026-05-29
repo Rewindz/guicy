@@ -3,6 +3,7 @@
 #include <wx/event.h>
 #include <wx/gdicmn.h>
 #include <wx/combobox.h>
+#include <wx/listbase.h>
 #include <wx/radiobut.h>
 #include <wx/panel.h>
 #include <wx/sizer.h>
@@ -11,6 +12,9 @@
 #include <wx/statbox.h>
 #include <wx/stattext.h>
 #include <wx/stringimpl.h>
+#include <wx/dataview.h>
+#include <wx/button.h>
+#include <wx/vector.h>
 
 GuicyFrame::GuicyFrame(const wxString& title) : wxFrame(nullptr, wxID_ANY, title)
 {
@@ -82,8 +86,8 @@ GuicyFrame::GuicyFrame(const wxString& title) : wxFrame(nullptr, wxID_ANY, title
             }
         };
 
-    targetVGVal->Bind(wxEVT_SPINCTRLDOUBLE, nicVGPG_EVT);
-    targetPGVal->Bind(wxEVT_SPINCTRLDOUBLE, nicVGPG_EVT);
+    targetVGVal->Bind(wxEVT_SPINCTRLDOUBLE, targetVGPG_EVT);
+    targetPGVal->Bind(wxEVT_SPINCTRLDOUBLE, targetVGPG_EVT);
 
     targetSizer->Add(lblCtrl(targetSizer->GetStaticBox(), "Strength", targetStrVal), 1, wxEXPAND | wxALL, 5);
     targetSizer->Add(lblCtrl(targetSizer->GetStaticBox(), "VG%", targetVGVal), 1, wxEXPAND | wxALL, 5);
@@ -97,7 +101,46 @@ GuicyFrame::GuicyFrame(const wxString& title) : wxFrame(nullptr, wxID_ANY, title
     auto* rightColSizer = new wxBoxSizer(wxVERTICAL);
     auto* flavoursSizer = new wxStaticBoxSizer(wxVERTICAL, rootPanel, "Flavours");
 
+    auto* flavoursList =
+        new wxDataViewListCtrl (flavoursSizer->GetStaticBox(), wxID_ANY);
+
+    flavoursList->AppendTextColumn("Name", wxDATAVIEW_CELL_EDITABLE, 100, wxALIGN_CENTER);
+    flavoursList->AppendTextColumn("Percentage", wxDATAVIEW_CELL_EDITABLE, 50, wxALIGN_CENTER);
+
+    flavoursList->Bind(wxEVT_DATAVIEW_ITEM_EDITING_DONE, [](wxDataViewEvent& event){
+        if(event.GetColumn() == 1){
+            double parsed;
+            if(!event.GetValue().GetString().ToDouble(&parsed)){
+                event.Veto();
+            } else {
+                event.SetValue(wxVariant(wxString::Format("%.2f", parsed)));
+            }
+        }
+    });
+
+    auto* flavoursBtnSizer = new wxBoxSizer(wxHORIZONTAL);
+    auto* addFlavourBtn = new wxButton(flavoursSizer->GetStaticBox(), wxID_ANY, "Add");
+    auto* delFlavourBtn = new wxButton(flavoursSizer->GetStaticBox(), wxID_ANY, "Remove");
+
+    addFlavourBtn->Bind(wxEVT_BUTTON, [flavoursList](wxCommandEvent& event){
+        flavoursList->AppendItem({"New Flavour", "0.00"});
+    });
+
+    delFlavourBtn->Bind(wxEVT_BUTTON, [flavoursList](wxCommandEvent& event){
+        if(int idx = flavoursList->GetSelectedRow(); idx >= 0)
+            flavoursList->DeleteItem(idx);
+    });
+
+    flavoursBtnSizer->Add(addFlavourBtn, 0, wxRIGHT, 10);
+    flavoursBtnSizer->Add(delFlavourBtn, 0, 0, 0);
+
+    flavoursSizer->Add(flavoursList, 1, wxEXPAND | wxALL, 5);
+    flavoursSizer->Add(flavoursBtnSizer, 0, wxALIGN_RIGHT | wxLEFT | wxRIGHT | wxBOTTOM , 5);
+
+    auto* submitBtn = new wxButton(rootPanel, wxID_ANY, "Submit");
+
     rightColSizer->Add(flavoursSizer, 1, wxEXPAND, 0);
+    rightColSizer->Add(submitBtn, 0, wxEXPAND | wxTOP, 5);
 
     rootSizer->Add(leftColSizer, 1, wxEXPAND | wxRIGHT, 15);
     rootSizer->Add(rightColSizer, 1, wxEXPAND, 0);
