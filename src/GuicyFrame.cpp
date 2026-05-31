@@ -41,13 +41,39 @@ constexpr double TARGETSTR_DEFAULT = 3.0;
 constexpr double TARGETVG_DEFAULT = 70.0;
 constexpr double TARGETPG_DEFAULT = 30.0;
 
-GuicyFrame::GuicyFrame(const wxString& title) : wxFrame(nullptr, wxID_ANY, title)
+void appCfgLog(const std::string& error){
+    wxMessageBox(error, "App Config Error", wxOK | wxICON_ERROR);
+}
+
+GuicyFrame::GuicyFrame(const wxString& title)
+    : wxFrame(nullptr, wxID_ANY, title),
+    appCfg(rz::Saveable<GuicyConfig>(rz::GetAppConfigPath("Guicy", appCfgLog).value_or(".") / "guicy.json", -1, appCfgLog))
 {
+
+    appCfg.Load();
 
     auto* menuBar = new wxMenuBar();
     auto* fileMenu = new wxMenu();
 
     fileMenu->Append(wxID_OPEN, "&Open\tCtrl-O", "Local a saved recipe");
+    fileMenu->AppendSeparator();
+    auto* recentMenu = new wxMenu();
+
+    auto assignRecentMenuItems = [=, this]() {
+        for(auto* item : recentMenu->GetMenuItems()){
+            recentMenu->Delete(item);
+        }
+        int i = 0;
+        for(const auto& recent : appCfg->recentSaves){
+            if(recent.empty())
+                break;
+            recentMenu->Append(wxID_FILE1 + i++, std::filesystem::path(recent).filename().string());
+        }
+    };
+
+    assignRecentMenuItems();
+    fileMenu->AppendSubMenu(recentMenu, "Open Recent");
+    fileMenu->AppendSeparator();
     fileMenu->Append(wxID_SAVE, "&Save\tCtrl-S", "Save the current recipe");
     fileMenu->Append(wxID_SAVEAS, "Save &As..\tCtrl-Shift-S", "Save recipe as a new file");
 
@@ -201,6 +227,8 @@ GuicyFrame::GuicyFrame(const wxString& title) : wxFrame(nullptr, wxID_ANY, title
 
     submitBtn->Bind(wxEVT_BUTTON, [=](wxCommandEvent& event){
 
+
+
     });
 
     resultsSizer->Add(resultsText, 1, wxEXPAND | wxALL, 5);
@@ -209,7 +237,7 @@ GuicyFrame::GuicyFrame(const wxString& title) : wxFrame(nullptr, wxID_ANY, title
     rightColSizer->Add(submitBtn, 0, wxEXPAND | wxTOP, 5);
 
     rootSizer->Add(leftColSizer, 1, wxEXPAND | wxRIGHT, 15);
-    rootSizer->Add(rightColSizer, 1, wxEXPAND, 0);
+    rootSizer->Add(rightColSizer, 1, wxEXPAND | wxRIGHT, 15);
     rootSizer->Add(resultsSizer, 1, wxEXPAND, 0);
 
     auto* paddingSizer = new wxBoxSizer(wxVERTICAL);
@@ -218,7 +246,32 @@ GuicyFrame::GuicyFrame(const wxString& title) : wxFrame(nullptr, wxID_ANY, title
     rootPanel->SetSizerAndFit(paddingSizer);
     paddingSizer->SetSizeHints(this);
 
-    auto loadFromSave = [=](const SaveData& saveData) -> void {
+    auto clearWidgets = [=]() -> void {
+        recipeNameVal->SetValue(BATCHNAME_DEFAULT);
+        batchTargetML->SetValue(BATCHVOL_DEFAULT);
+        nicStrSel->SetValue(nicStrOpts[NICUNIT_DEFAULT]);
+        nicStrVal->SetValue(NICSTR_DEFAULT);
+        nicVGVal->SetValue(NICVG_DEFAULT);
+        nicPGVal->SetValue(NICPG_DEFAULT);
+        targetStrVal->SetValue(TARGETSTR_DEFAULT);
+        targetVGVal->SetValue(TARGETVG_DEFAULT);
+        targetPGVal->SetValue(TARGETPG_DEFAULT);
+        flavoursList->DeleteAllItems();
+    };
+
+    auto loadFromSave = [=, this](const std::filesystem::path& filePath) -> void {
+        auto saveDataOpt = rz::LoadObjectFromJsonFile_OBJ<SaveData>(filePath, [](const std::string& error){
+            wxMessageBox(error, "Load Error", wxOK | wxICON_ERROR);
+        });
+
+        if(!saveDataOpt)
+            return;
+
+        SaveData& saveData = *saveDataOpt;
+
+        currentSavePath = filePath;
+        clearWidgets();
+
         recipeNameVal->SetValue(saveData.name);
         batchTargetML->SetValue(saveData.targetVol);
         nicStrSel->SetValue(nicStrOpts[std::to_underlying(saveData.nicUnit)]);
@@ -231,7 +284,10 @@ GuicyFrame::GuicyFrame(const wxString& title) : wxFrame(nullptr, wxID_ANY, title
 
         for(const auto& flavour : saveData.flavours)
         {
-            flavoursList->AppendItem({flavour.name, wxString::Format("%.2f", flavour.percent)});
+            wxVector<wxVariant> vec;
+            vec.push_back(flavour.name);
+            vec.push_back(wxString::Format("%.2f", flavour.percent));
+            flavoursList->AppendItem(vec);
         }
 
     };
@@ -260,45 +316,48 @@ GuicyFrame::GuicyFrame(const wxString& title) : wxFrame(nullptr, wxID_ANY, title
         return data;
     };
 
-    auto clearWidgets = [=]() -> void {
-        recipeNameVal->SetValue(BATCHNAME_DEFAULT);
-        batchTargetML->SetValue(BATCHVOL_DEFAULT);
-        nicStrSel->SetValue(nicStrOpts[NICUNIT_DEFAULT]);
-        nicStrVal->SetValue(NICSTR_DEFAULT);
-        nicVGVal->SetValue(NICVG_DEFAULT);
-        nicPGVal->SetValue(NICPG_DEFAULT);
-        targetStrVal->SetValue(TARGETSTR_DEFAULT);
-        targetVGVal->SetValue(TARGETVG_DEFAULT);
-        targetPGVal->SetValue(TARGETPG_DEFAULT);
-        flavoursList->DeleteAllItems();
-    };
-
-    this->Bind(wxEVT_MENU, [this, clearWidgets, loadFromSave](wxCommandEvent& event){
+    this->Bind(wxEVT_MENU, [this, loadFromSave, assignRecentMenuItems](wxCommandEvent& event){
         wxFileDialog openFileDlg(this, "Open Recipe File", "", "",
             "Recipe files (*.rcp)|*.rcp|All files (*.*)|*.*", wxFD_OPEN | wxFD_FILE_MUST_EXIST);
 
         if(openFileDlg.ShowModal() == wxID_CANCEL)
             return;
 
-        std::filesystem::path filePath(openFileDlg.GetPath().ToStdString());
-        auto saveData = rz::LoadObjectFromJsonFile_OBJ<SaveData>(filePath, [](const std::string& error){
-            wxMessageBox(error, "Load Error", wxOK | wxICON_ERROR);
-        });
+        auto path = openFileDlg.GetPath().ToStdString();
 
-        if(!saveData)
-            return;
+        loadFromSave(std::filesystem::path(path));
 
-        currentSavePath = filePath;
-        clearWidgets();
-
-        loadFromSave(*saveData);
+        appCfg->saveNextRecent(path);
+        assignRecentMenuItems();
+        appCfg.Save();
 
     }, wxID_OPEN);
 
-    auto saveFn = [this, saveFromWidgets](const std::filesystem::path& path){
-        rz::WriteObjToJsonFile(saveFromWidgets(), *currentSavePath, 0, [](const std::string& error){
+    this->Bind(wxEVT_MENU, [this, loadFromSave](wxCommandEvent& event){
+        loadFromSave(appCfg->recentSaves[0]);
+    }, wxID_FILE1);
+
+    this->Bind(wxEVT_MENU, [this, loadFromSave](wxCommandEvent& event){
+        loadFromSave(appCfg->recentSaves[1]);
+    }, wxID_FILE2);
+
+    this->Bind(wxEVT_MENU, [this, loadFromSave](wxCommandEvent& event){
+        loadFromSave(appCfg->recentSaves[2]);
+    }, wxID_FILE3);
+
+    this->Bind(wxEVT_MENU, [this, loadFromSave](wxCommandEvent& event){
+        loadFromSave(appCfg->recentSaves[3]);
+    }, wxID_FILE4);
+
+    auto saveFn = [this, saveFromWidgets, assignRecentMenuItems](const std::filesystem::path& path){
+        auto res = rz::WriteObjToJsonFile(saveFromWidgets(), *currentSavePath, 0, [](const std::string& error){
             wxMessageBox(error, "Save Error", wxOK | wxICON_ERROR);
         });
+        if(res == rz::STATUS::RZ_SUCCESS){
+            appCfg->saveNextRecent(path.string());
+            assignRecentMenuItems();
+            auto status = appCfg.Save();
+        }
     };
 
     this->Bind(wxEVT_MENU, [this, saveFn](wxCommandEvent& event){
