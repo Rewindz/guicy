@@ -29,12 +29,21 @@ double CalcNicBaseDensity(double mgmlStr, double vgRatio)
 std::unique_ptr<std::string> JuiceCalc(const SaveData& _data)
 {
     auto res = std::make_unique<std::string>();
-    double baseNicDensity = CalcNicBaseDensity(_data.nicStr, _data.nicVG / 100.0);
 
-    double targetBaseVol = (_data.targetVol * _data.targetStr) / _data.nicStr;
+    double workingNicStr = _data.nicStr;
+    double workingTargetStr = _data.targetStr;
+    if(_data.nicUnit == NicUnit::VOLUME){
+        double pureNicMgPerMl = NIC_DENSITY * 1000.0;
+        workingNicStr = (workingNicStr / 100.0) * pureNicMgPerMl;
+        workingTargetStr = (workingTargetStr / 100.0) * pureNicMgPerMl;
+    }
+
+    double baseNicDensity = CalcNicBaseDensity(workingNicStr, _data.nicVG / 100.0);
+
+    double targetBaseVol = (_data.targetVol * workingTargetStr) / workingNicStr;
     double targetBaseMass = targetBaseVol * baseNicDensity;
 
-    double nicVol = (_data.targetVol * _data.targetStr) / (1000.0 * NIC_DENSITY);
+    double nicVol = (_data.targetVol * workingTargetStr) / (1000.0 * NIC_DENSITY);
     double carrierVol = targetBaseVol - nicVol;
     double nicVGVol = carrierVol * (_data.nicVG / 100.0);
     double nicPGVol = carrierVol * (_data.nicPG / 100.0);

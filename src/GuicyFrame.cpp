@@ -66,6 +66,8 @@ GuicyFrame::GuicyFrame(const wxString& title)
                 break;
             recentMenu->Append(wxID_FILE1 + i++, std::filesystem::path(recent).filename().string());
         }
+        recentMenu->AppendSeparator();
+        recentMenu->Append(wxID_CLEAR, "Clear Recent");
     };
 
     assignRecentMenuItems();
@@ -358,6 +360,12 @@ GuicyFrame::GuicyFrame(const wxString& title)
             }
         }
     }, wxID_PRINT);
+
+    this->Bind(wxEVT_MENU, [this, assignRecentMenuItems](wxCommandEvent& event){
+        appCfg->recentSaves.fill("\0");
+        assignRecentMenuItems();
+        appCfg.Save();
+    }, wxID_CLEAR);
 
     auto saveFn = [this, saveFromWidgets, assignRecentMenuItems](const std::filesystem::path& path){
         auto res = rz::WriteObjToJsonFile(saveFromWidgets(), *currentSavePath, 0, [](const std::string& error){
