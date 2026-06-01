@@ -28,7 +28,7 @@
 
 #include "Save.hpp"
 #include "Calculation.hpp"
-#include "rz/json/json.hpp"
+#include "RecipePrint.hpp"
 
 constexpr double BATCHVOL_DEFAULT = 60.0;
 constexpr const char* BATCHNAME_DEFAULT = "Untitled Recipe";
@@ -73,7 +73,8 @@ GuicyFrame::GuicyFrame(const wxString& title)
     fileMenu->AppendSeparator();
     fileMenu->Append(wxID_SAVE, "&Save\tCtrl-S", "Save the current recipe");
     fileMenu->Append(wxID_SAVEAS, "Save &As..\tCtrl-Shift-S", "Save recipe as a new file");
-
+    fileMenu->AppendSeparator();
+    fileMenu->Append(wxID_PRINT, "&Print Recipe\tCtrl-P", "Print the current recipe.");
     fileMenu->AppendSeparator();
     fileMenu->Append(wxID_EXIT, "E&xit\tAlt-X", "Quit the application");
 
@@ -307,11 +308,12 @@ GuicyFrame::GuicyFrame(const wxString& title)
         return data;
     };
 
-    submitBtn->Bind(wxEVT_BUTTON, [this, saveFromWidgets, resultsText](wxCommandEvent& event){
-        auto data = saveFromWidgets();
-        auto resText = JuiceCalc(data);
+    auto submitAction = [this, saveFromWidgets, resultsText](wxCommandEvent& event) -> void {
+        auto resText = JuiceCalc(saveFromWidgets());
         resultsText->SetValue(*resText);
-    });
+    };
+
+    submitBtn->Bind(wxEVT_BUTTON, submitAction);
 
     this->Bind(wxEVT_MENU, [this, loadFromSave, assignRecentMenuItems](wxCommandEvent& event){
         wxFileDialog openFileDlg(this, "Open Recipe File", "", "",
@@ -345,6 +347,17 @@ GuicyFrame::GuicyFrame(const wxString& title)
     this->Bind(wxEVT_MENU, [this, loadFromSave](wxCommandEvent& event){
         loadFromSave(appCfg->recentSaves[3]);
     }, wxID_FILE4);
+
+    this->Bind(wxEVT_MENU, [this, resultsText, submitAction](wxCommandEvent& event){
+        submitAction(event);
+        wxPrinter printer;
+        RecipePrintout printout("E-Juice Recipe", resultsText->GetValue());
+        if(!printer.Print(this, &printout, true)){
+            if(wxPrinter::GetLastError() == wxPRINTER_ERROR){
+                wxMessageBox("There was a problem printing. Ensure your printer is connected.", "Print Error", wxOK | wxICON_ERROR);
+            }
+        }
+    }, wxID_PRINT);
 
     auto saveFn = [this, saveFromWidgets, assignRecentMenuItems](const std::filesystem::path& path){
         auto res = rz::WriteObjToJsonFile(saveFromWidgets(), *currentSavePath, 0, [](const std::string& error){
