@@ -312,7 +312,7 @@ GuicyFrame::GuicyFrame(const wxString& title)
 
     auto submitAction = [this, saveFromWidgets, resultsText](wxCommandEvent& event) -> void {
         auto resText = JuiceCalc(saveFromWidgets());
-        resultsText->SetValue(*resText);
+        resultsText->SetValue(resText);
     };
 
     submitBtn->Bind(wxEVT_BUTTON, submitAction);

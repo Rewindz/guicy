@@ -1,6 +1,4 @@
 #include "Calculation.hpp"
-
-#include <utility>
 #include <map>
 #include <format>
 
@@ -26,9 +24,9 @@ double CalcNicBaseDensity(double mgmlStr, double vgRatio)
     return nicGrams + vgGrams + pgGrams;
 }
 
-std::unique_ptr<std::string> JuiceCalc(const SaveData& _data)
+std::string JuiceCalc(const SaveData& _data)
 {
-    auto res = std::make_unique<std::string>();
+    std::string res = "";
 
     double workingNicStr = _data.nicStr;
     double workingTargetStr = _data.targetStr;
@@ -83,7 +81,7 @@ std::unique_ptr<std::string> JuiceCalc(const SaveData& _data)
     double finalVol = targetBaseVol + totalFlavourVol + vgVolToAdd + pgVolToAdd;
     double finalMass = targetBaseMass + totalFlavourMass + vgMassToAdd + pgMassToAdd;
 
-    *res = std::format(
+    res = std::format(
       " Recipe {}\n"
       "=====================================\n"
       " Nicotine Base: {:^6.2f}mL | {:^6.2f}g\n"
@@ -101,5 +99,5 @@ std::unique_ptr<std::string> JuiceCalc(const SaveData& _data)
     );
 
 
-    return std::move(res);
+    return res;
 }
