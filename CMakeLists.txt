@@ -23,4 +23,5 @@ target_link_libraries(guicy PRIVATE rzutils ${wxWidgets_LIBRARIES})
 target_sources(guicy PRIVATE
   src/main.cpp
   src/GuicyFrame.cpp
+  src/Calculation.cpp
 )

@@ -27,6 +27,7 @@
 #include <rz/rzutils.hpp>
 
 #include "Save.hpp"
+#include "Calculation.hpp"
 #include "rz/json/json.hpp"
 
 constexpr double BATCHVOL_DEFAULT = 60.0;
@@ -41,13 +42,9 @@ constexpr double TARGETSTR_DEFAULT = 3.0;
 constexpr double TARGETVG_DEFAULT = 70.0;
 constexpr double TARGETPG_DEFAULT = 30.0;
 
-void appCfgLog(const std::string& error){
-    wxMessageBox(error, "App Config Error", wxOK | wxICON_ERROR);
-}
-
 GuicyFrame::GuicyFrame(const wxString& title)
     : wxFrame(nullptr, wxID_ANY, title),
-    appCfg(rz::Saveable<GuicyConfig>(rz::GetAppConfigPath("Guicy", appCfgLog).value_or(".") / "guicy.json", -1, appCfgLog))
+    appCfg(rz::Saveable<GuicyConfig>(rz::GetAppConfigPath("Guicy").value_or(".") / "guicy.json"))
 {
 
     appCfg.Load();
@@ -225,12 +222,6 @@ GuicyFrame::GuicyFrame(const wxString& title)
         resultsText->SetFont(monoFont);
     }
 
-    submitBtn->Bind(wxEVT_BUTTON, [=](wxCommandEvent& event){
-
-
-
-    });
-
     resultsSizer->Add(resultsText, 1, wxEXPAND | wxALL, 5);
 
     rightColSizer->Add(flavoursSizer, 1, wxEXPAND, 0);
@@ -238,7 +229,7 @@ GuicyFrame::GuicyFrame(const wxString& title)
 
     rootSizer->Add(leftColSizer, 1, wxEXPAND | wxRIGHT, 15);
     rootSizer->Add(rightColSizer, 1, wxEXPAND | wxRIGHT, 15);
-    rootSizer->Add(resultsSizer, 1, wxEXPAND, 0);
+    rootSizer->Add(resultsSizer, 2, wxEXPAND, 0);
 
     auto* paddingSizer = new wxBoxSizer(wxVERTICAL);
     paddingSizer->Add(rootSizer, 1, wxEXPAND | wxALL, 20);
@@ -315,6 +306,12 @@ GuicyFrame::GuicyFrame(const wxString& title)
 
         return data;
     };
+
+    submitBtn->Bind(wxEVT_BUTTON, [this, saveFromWidgets, resultsText](wxCommandEvent& event){
+        auto data = saveFromWidgets();
+        auto resText = JuiceCalc(data);
+        resultsText->SetValue(*resText);
+    });
 
     this->Bind(wxEVT_MENU, [this, loadFromSave, assignRecentMenuItems](wxCommandEvent& event){
         wxFileDialog openFileDlg(this, "Open Recipe File", "", "",
