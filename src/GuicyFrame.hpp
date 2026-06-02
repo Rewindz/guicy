@@ -13,5 +13,5 @@ public:
     GuicyFrame(const wxString& title);
 private:
     std::optional<std::filesystem::path> currentSavePath = std::nullopt;
-    rz::Saveable<GuicyConfig> appCfg;
+    rz::json::Saveable<GuicyConfig> appCfg;
 };

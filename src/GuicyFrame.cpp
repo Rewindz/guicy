@@ -44,7 +44,7 @@ constexpr double TARGETPG_DEFAULT = 30.0;
 
 GuicyFrame::GuicyFrame(const wxString& title)
     : wxFrame(nullptr, wxID_ANY, title),
-    appCfg(rz::Saveable<GuicyConfig>(rz::GetAppConfigPath("Guicy").value_or(".") / "guicy.json"))
+    appCfg(rz::json::Saveable<GuicyConfig>(rz::fs::GetAppConfigPath("Guicy").value_or(".") / "guicy.json"))
 {
 
     appCfg.Load();
@@ -254,7 +254,7 @@ GuicyFrame::GuicyFrame(const wxString& title)
     };
 
     auto loadFromSave = [=, this](const std::filesystem::path& filePath) -> void {
-        auto saveDataOpt = rz::LoadObjectFromJsonFile_OBJ<SaveData>(filePath, [](const std::string& error){
+        auto saveDataOpt = rz::json::LoadObjectFromJsonFile_OBJ<SaveData>(filePath, [](const std::string& error){
             wxMessageBox(error, "Load Error", wxOK | wxICON_ERROR);
         });
 
@@ -368,7 +368,7 @@ GuicyFrame::GuicyFrame(const wxString& title)
     }, wxID_CLEAR);
 
     auto saveFn = [this, saveFromWidgets, assignRecentMenuItems](const std::filesystem::path& path){
-        auto res = rz::WriteObjToJsonFile(saveFromWidgets(), *currentSavePath, 0, [](const std::string& error){
+        auto res = rz::json::WriteObjToJsonFile(saveFromWidgets(), *currentSavePath, 0, [](const std::string& error){
             wxMessageBox(error, "Save Error", wxOK | wxICON_ERROR);
         });
         if(res == rz::STATUS::RZ_SUCCESS){
