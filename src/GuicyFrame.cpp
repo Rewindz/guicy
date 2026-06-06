@@ -57,9 +57,18 @@ GuicyFrame::GuicyFrame(const wxString& title)
     auto* recentMenu = new wxMenu();
 
     auto assignRecentMenuItems = [=, this]() {
-        for(auto* item : recentMenu->GetMenuItems()){
-            recentMenu->Delete(item);
+        { /* Weird fix for crash that only happens on Windows? */
+            std::vector<wxMenuItem*> menuItems;
+            menuItems.reserve(recentMenu->GetMenuItemCount());
+            for(auto* item : recentMenu->GetMenuItems()){
+                menuItems.push_back(item);
+            }
+            for(auto* item : menuItems){
+                if(item)
+                    recentMenu->Delete(item);
+            }
         }
+
         int i = 0;
         for(const auto& recent : appCfg->recentSaves){
             if(recent.empty())
@@ -362,7 +371,7 @@ GuicyFrame::GuicyFrame(const wxString& title)
     }, wxID_PRINT);
 
     this->Bind(wxEVT_MENU, [this, assignRecentMenuItems](wxCommandEvent& event){
-        appCfg->recentSaves.fill("\0");
+        appCfg->recentSaves.fill("");
         assignRecentMenuItems();
         appCfg.Save();
     }, wxID_CLEAR);
