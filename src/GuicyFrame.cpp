@@ -42,6 +42,11 @@ constexpr double TARGETSTR_DEFAULT = 3.0;
 constexpr double TARGETVG_DEFAULT = 70.0;
 constexpr double TARGETPG_DEFAULT = 30.0;
 
+constexpr int FLAVOUR_NAME_COL = 0;
+constexpr int FLAVOUR_PERCENT_COL = 1;
+constexpr int FLAVOUR_PG_COL = 2;
+
+
 GuicyFrame::GuicyFrame(const wxString& title)
     : wxFrame(nullptr, wxID_ANY, title),
     appCfg(rz::json::Saveable<GuicyConfig>(rz::fs::GetAppConfigPath("Guicy").value_or(".") / "guicy.json"))
@@ -190,16 +195,33 @@ GuicyFrame::GuicyFrame(const wxString& title)
     auto* flavoursList =
         new wxDataViewListCtrl (flavoursSizer->GetStaticBox(), wxID_ANY);
 
-    flavoursList->AppendTextColumn("Name", wxDATAVIEW_CELL_EDITABLE, 100, wxALIGN_CENTER);
-    flavoursList->AppendTextColumn("Percentage", wxDATAVIEW_CELL_EDITABLE, 50, wxALIGN_CENTER);
+    flavoursList->AppendTextColumn("Name", wxDATAVIEW_CELL_EDITABLE, wxCOL_WIDTH_AUTOSIZE, wxALIGN_CENTER);
+    flavoursList->AppendTextColumn("Percentage", wxDATAVIEW_CELL_EDITABLE, wxCOL_WIDTH_AUTOSIZE, wxALIGN_CENTER);
+    flavoursList->AppendTextColumn("PG%", wxDATAVIEW_CELL_EDITABLE, wxCOL_WIDTH_AUTOSIZE, wxALIGN_CENTER);
 
     flavoursList->Bind(wxEVT_DATAVIEW_ITEM_EDITING_DONE, [](wxDataViewEvent& event){
-        if(event.GetColumn() == 1){
-            double parsed;
-            if(!event.GetValue().GetString().ToDouble(&parsed)){
-                event.Veto();
-            } else {
+        unsigned int col = event.GetColumn();
+        if(!col)
+            return;
+
+        double parsed;
+        if(!event.GetValue().GetString().ToDouble(&parsed)){
+            event.Veto();
+            return;
+        }
+
+        switch(col){
+            case FLAVOUR_PERCENT_COL:{
                 event.SetValue(wxVariant(wxString::Format("%.2f", parsed)));
+                break;
+            }
+            case FLAVOUR_PG_COL:{
+                if(parsed > 100.0 || parsed < 0.0){
+                    event.Veto();
+                } else {
+                    event.SetValue(wxVariant(wxString::Format("%.1f", parsed)));
+                }
+                break;
             }
         }
     });
@@ -209,7 +231,7 @@ GuicyFrame::GuicyFrame(const wxString& title)
     auto* delFlavourBtn = new wxButton(flavoursSizer->GetStaticBox(), wxID_ANY, "Remove");
 
     addFlavourBtn->Bind(wxEVT_BUTTON, [flavoursList](wxCommandEvent& event){
-        flavoursList->AppendItem({"New Flavour", "0.00"});
+        flavoursList->AppendItem({"New Flavour", "0.00", "100.0"});
     });
 
     delFlavourBtn->Bind(wxEVT_BUTTON, [flavoursList](wxCommandEvent& event){
@@ -227,7 +249,7 @@ GuicyFrame::GuicyFrame(const wxString& title)
 
     auto* resultsSizer = new wxStaticBoxSizer(wxVERTICAL, rootPanel, "Final Recipe");
     auto* resultsText = new wxTextCtrl(resultsSizer->GetStaticBox(), wxID_ANY, wxEmptyString,
-        wxDefaultPosition, wxSize(-1, 200), wxTE_MULTILINE | wxTE_READONLY | wxTE_DONTWRAP);
+        wxDefaultPosition, wxDefaultSize, wxTE_MULTILINE | wxTE_READONLY | wxTE_DONTWRAP);
 
     {
         wxFont monoFont = wxFontInfo(11).Family(wxFONTFAMILY_TELETYPE);
@@ -290,6 +312,7 @@ GuicyFrame::GuicyFrame(const wxString& title)
             wxVector<wxVariant> vec;
             vec.push_back(flavour.name);
             vec.push_back(wxString::Format("%.2f", flavour.percent));
+            vec.push_back(wxString::Format("%.1f", flavour.pg));
             flavoursList->AppendItem(vec);
         }
 
@@ -310,9 +333,12 @@ GuicyFrame::GuicyFrame(const wxString& title)
 
         for(int row = 0; row < flavoursList->GetItemCount(); row++){
             FlavourData flav;
-            flav.name = flavoursList->GetTextValue(row, 0).ToStdString();
-            wxString percent = flavoursList->GetTextValue(row, 1);
+            flav.name = flavoursList->GetTextValue(row, FLAVOUR_NAME_COL).ToStdString();
+            wxString percent = flavoursList->GetTextValue(row, FLAVOUR_PERCENT_COL);
             percent.ToDouble(&flav.percent);
+            wxString pg_percent = flavoursList->GetTextValue(row, FLAVOUR_PG_COL);
+            pg_percent.ToDouble(&flav.pg);
+            flav.vg = 100.0 - flav.pg;
             data.flavours.push_back(flav);
         }
 
