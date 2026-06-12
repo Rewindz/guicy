@@ -57,6 +57,8 @@ GuicyFrame::GuicyFrame(const wxString& title)
     auto* menuBar = new wxMenuBar();
     auto* fileMenu = new wxMenu();
 
+    fileMenu->Append(wxID_NEW, "&New", "Open a new recipe");
+    fileMenu->AppendSeparator();
     fileMenu->Append(wxID_OPEN, "&Open\tCtrl-O", "Local a saved recipe");
     fileMenu->AppendSeparator();
     auto* recentMenu = new wxMenu();
@@ -117,14 +119,24 @@ GuicyFrame::GuicyFrame(const wxString& title)
         new wxTextCtrl(batchSizer->GetStaticBox(), wxID_ANY, BATCHNAME_DEFAULT,
            wxDefaultPosition, wxDefaultSize, wxTE_CAPITALIZE);
 
+    recipeNameVal->Bind(wxEVT_TEXT, [this](wxCommandEvent& event){
+        this->recipeDirty = true;
+    });
+
     auto* batchTargetML =
         new wxSpinCtrlDouble(batchSizer->GetStaticBox(), wxID_ANY, wxEmptyString, wxDefaultPosition,
             wxDefaultSize, wxSP_ARROW_KEYS, 0.0, 10000.0, BATCHVOL_DEFAULT, 1.0);
+    batchTargetML->Bind(wxEVT_SPINCTRLDOUBLE, [this](wxSpinDoubleEvent& event){
+        this->recipeDirty = true;
+    });
 
     wxString nicStrOpts[] = {"Volume (%)", "Weight (mg/mL)"};
     auto* nicStrSel =
         new wxComboBox(batchSizer->GetStaticBox(), wxID_ANY, nicStrOpts[NICUNIT_DEFAULT],
             wxDefaultPosition, wxDefaultSize, 2, nicStrOpts, wxCB_READONLY);
+    nicStrSel->Bind(wxEVT_COMBOBOX, [this](wxCommandEvent& event){
+        this->recipeDirty = true;
+    });
 
     batchSizer->Add(recipeNameVal, 1, wxEXPAND | wxALL, 5);
     batchSizer->Add(lblCtrl(batchSizer->GetStaticBox(), "Target mL", batchTargetML), 1, wxEXPAND | wxALL, 5);
@@ -134,6 +146,9 @@ GuicyFrame::GuicyFrame(const wxString& title)
     auto* nicStrVal =
         new wxSpinCtrlDouble(nicSizer->GetStaticBox(), wxID_ANY, wxEmptyString, wxDefaultPosition,
             wxDefaultSize, wxSP_ARROW_KEYS, 0.0, 100.0, NICSTR_DEFAULT, 1.0);
+    nicStrVal->Bind(wxEVT_SPINCTRLDOUBLE, [this](wxSpinDoubleEvent& event){
+        this->recipeDirty = true;
+    });
     auto* nicVGVal =
         new wxSpinCtrlDouble(nicSizer->GetStaticBox(), wxID_ANY, wxEmptyString, wxDefaultPosition,
             wxDefaultSize, wxSP_ARROW_KEYS, 0.0, 100.0, NICVG_DEFAULT, 1.0);
@@ -141,13 +156,14 @@ GuicyFrame::GuicyFrame(const wxString& title)
         new wxSpinCtrlDouble(nicSizer->GetStaticBox(), wxID_ANY, wxEmptyString, wxDefaultPosition,
             wxDefaultSize, wxSP_ARROW_KEYS, 0.0, 100.0, NICPG_DEFAULT, 1.0);
 
-    auto nicVGPG_EVT = [nicVGVal, nicPGVal](wxSpinDoubleEvent& event) -> void
+    auto nicVGPG_EVT = [this, nicVGVal, nicPGVal](wxSpinDoubleEvent& event) -> void
         {
             if(event.GetEventObject() == nicVGVal){
                 nicPGVal->SetValue(100.0 - event.GetValue());
             } else {
                 nicVGVal->SetValue(100.0 - event.GetValue());
             }
+            this->recipeDirty = true;
         };
 
     nicVGVal->Bind(wxEVT_SPINCTRLDOUBLE, nicVGPG_EVT);
@@ -161,6 +177,9 @@ GuicyFrame::GuicyFrame(const wxString& title)
     auto* targetStrVal =
         new wxSpinCtrlDouble(targetSizer->GetStaticBox(), wxID_ANY, wxEmptyString, wxDefaultPosition,
             wxDefaultSize, wxSP_ARROW_KEYS, 0.0, 100.0, TARGETSTR_DEFAULT, 1.0);
+    targetStrVal->Bind(wxEVT_SPINCTRLDOUBLE, [this](wxSpinDoubleEvent& event){
+        this->recipeDirty = true;
+    });
     auto* targetVGVal =
         new wxSpinCtrlDouble(targetSizer->GetStaticBox(), wxID_ANY, wxEmptyString, wxDefaultPosition,
             wxDefaultSize, wxSP_ARROW_KEYS, 0.0, 100.0, TARGETVG_DEFAULT, 1.0);
@@ -168,13 +187,14 @@ GuicyFrame::GuicyFrame(const wxString& title)
         new wxSpinCtrlDouble(targetSizer->GetStaticBox(), wxID_ANY, wxEmptyString, wxDefaultPosition,
             wxDefaultSize, wxSP_ARROW_KEYS, 0.0, 100.0, TARGETPG_DEFAULT, 1.0);
 
-    auto targetVGPG_EVT = [targetVGVal, targetPGVal](wxSpinDoubleEvent& event) -> void
+    auto targetVGPG_EVT = [this, targetVGVal, targetPGVal](wxSpinDoubleEvent& event) -> void
         {
             if(event.GetEventObject() == targetVGVal){
                 targetPGVal->SetValue(100.0 - event.GetValue());
             } else {
                 targetVGVal->SetValue(100.0 - event.GetValue());
             }
+            this->recipeDirty = true;
         };
 
     targetVGVal->Bind(wxEVT_SPINCTRLDOUBLE, targetVGPG_EVT);
@@ -199,10 +219,12 @@ GuicyFrame::GuicyFrame(const wxString& title)
     flavoursList->AppendTextColumn("Percentage", wxDATAVIEW_CELL_EDITABLE, wxCOL_WIDTH_AUTOSIZE, wxALIGN_CENTER);
     flavoursList->AppendTextColumn("PG%", wxDATAVIEW_CELL_EDITABLE, wxCOL_WIDTH_AUTOSIZE, wxALIGN_CENTER);
 
-    flavoursList->Bind(wxEVT_DATAVIEW_ITEM_EDITING_DONE, [](wxDataViewEvent& event){
+    flavoursList->Bind(wxEVT_DATAVIEW_ITEM_EDITING_DONE, [this](wxDataViewEvent& event){
         unsigned int col = event.GetColumn();
-        if(!col)
+        if(!col){
+            event.Veto();
             return;
+        }
 
         double parsed;
         if(!event.GetValue().GetString().ToDouble(&parsed)){
@@ -210,6 +232,7 @@ GuicyFrame::GuicyFrame(const wxString& title)
             return;
         }
 
+        this->recipeDirty = true;
         switch(col){
             case FLAVOUR_PERCENT_COL:{
                 event.SetValue(wxVariant(wxString::Format("%.2f", parsed)));
@@ -230,13 +253,16 @@ GuicyFrame::GuicyFrame(const wxString& title)
     auto* addFlavourBtn = new wxButton(flavoursSizer->GetStaticBox(), wxID_ANY, "Add");
     auto* delFlavourBtn = new wxButton(flavoursSizer->GetStaticBox(), wxID_ANY, "Remove");
 
-    addFlavourBtn->Bind(wxEVT_BUTTON, [flavoursList](wxCommandEvent& event){
+    addFlavourBtn->Bind(wxEVT_BUTTON, [this, flavoursList](wxCommandEvent& event){
         flavoursList->AppendItem({"New Flavour", "0.00", "100.0"});
+        this->recipeDirty = true;
     });
 
-    delFlavourBtn->Bind(wxEVT_BUTTON, [flavoursList](wxCommandEvent& event){
-        if(int idx = flavoursList->GetSelectedRow(); idx >= 0)
+    delFlavourBtn->Bind(wxEVT_BUTTON, [this, flavoursList](wxCommandEvent& event){
+        if(int idx = flavoursList->GetSelectedRow(); idx >= 0){
             flavoursList->DeleteItem(idx);
+            this->recipeDirty = true;
+        }
     });
 
     flavoursBtnSizer->Add(addFlavourBtn, 0, wxRIGHT, 10);
@@ -315,7 +341,7 @@ GuicyFrame::GuicyFrame(const wxString& title)
             vec.push_back(wxString::Format("%.1f", flavour.pg));
             flavoursList->AppendItem(vec);
         }
-
+        this->recipeDirty = false;
     };
 
     auto saveFromWidgets = [=]() -> SaveData {
@@ -366,7 +392,6 @@ GuicyFrame::GuicyFrame(const wxString& title)
         appCfg->saveNextRecent(path);
         assignRecentMenuItems();
         appCfg.Save();
-
     }, wxID_OPEN);
 
     this->Bind(wxEVT_MENU, [this, loadFromSave](wxCommandEvent& event){
@@ -410,6 +435,7 @@ GuicyFrame::GuicyFrame(const wxString& title)
             appCfg->saveNextRecent(path.string());
             assignRecentMenuItems();
             auto status = appCfg.Save();
+            this->recipeDirty = false;
         }
     };
 
@@ -434,8 +460,47 @@ GuicyFrame::GuicyFrame(const wxString& title)
 
     }, wxID_SAVEAS);
 
-    this->Bind(wxEVT_MENU, [this](wxCommandEvent& event){
+    auto askSave = [this]() -> bool{
+        int res = wxMessageBox("Do you want to Save?", "Save?", wxYES | wxNO | wxCANCEL);
+        switch(res)
+        {
+            case wxYES:{
+                wxCommandEvent save(wxEVT_MENU, wxID_SAVE);
+                this->GetEventHandler()->ProcessEvent(save);
+                break;
+            }
+            case wxCANCEL:
+                return false;
+        }
+        return true;
+    };
+
+    this->Bind(wxEVT_MENU, [this, clearWidgets, askSave](wxCommandEvent& event){
+        if(this->recipeDirty){
+            askSave();
+        }
+        clearWidgets();
+        this->currentSavePath = std::nullopt;
+        this->recipeDirty = false;
+    }, wxID_NEW);
+
+    this->Bind(wxEVT_MENU, [this, askSave](wxCommandEvent& event){
+        if(this->recipeDirty){
+            if(!askSave())
+                return;
+        }
         this->Close(true);
     }, wxID_EXIT);
+
+    this->Bind(wxEVT_CLOSE_WINDOW, [this, askSave](wxCloseEvent& event){
+        if(event.CanVeto() && this->recipeDirty){
+            if(!askSave()){
+                event.Veto();
+                return;
+            }
+        }
+
+        event.Skip();
+    });
 
 }

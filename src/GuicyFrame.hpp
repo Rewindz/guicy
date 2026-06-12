@@ -12,6 +12,7 @@ class GuicyFrame : public wxFrame
 public:
     GuicyFrame(const wxString& title);
 private:
+    bool recipeDirty = false;
     std::optional<std::filesystem::path> currentSavePath = std::nullopt;
     rz::json::Saveable<GuicyConfig> appCfg;
 };
