@@ -222,7 +222,6 @@ GuicyFrame::GuicyFrame(const wxString& title)
     flavoursList->Bind(wxEVT_DATAVIEW_ITEM_EDITING_DONE, [this](wxDataViewEvent& event){
         unsigned int col = event.GetColumn();
         if(!col){
-            event.Veto();
             return;
         }
 
