@@ -25,3 +25,6 @@ target_sources(guicy PRIVATE
   src/GuicyFrame.cpp
   src/Calculation.cpp
 )
+
+include(GNUInstallDirs)
+install(TARGETS guicy)
