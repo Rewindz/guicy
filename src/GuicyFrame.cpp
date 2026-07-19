@@ -310,8 +310,8 @@ GuicyFrame::GuicyFrame(const wxString& title)
     };
 
     auto loadFromSave = [=, this](const std::filesystem::path& filePath) -> void {
-        auto saveDataOpt = rz::json::LoadObjectFromJsonFile_OBJ<SaveData>(filePath, [](const std::string& error){
-            wxMessageBox(error, "Load Error", wxOK | wxICON_ERROR);
+        auto saveDataOpt = rz::json::LoadObjectFromJsonFile_OBJ<SaveData>(filePath, [](std::string_view error){
+            wxMessageBox(std::string(error), "Load Error", wxOK | wxICON_ERROR);
         });
 
         if(!saveDataOpt)
@@ -427,8 +427,8 @@ GuicyFrame::GuicyFrame(const wxString& title)
     }, wxID_CLEAR);
 
     auto saveFn = [this, saveFromWidgets, assignRecentMenuItems](const std::filesystem::path& path){
-        auto res = rz::json::WriteObjToJsonFile(saveFromWidgets(), *currentSavePath, 0, [](const std::string& error){
-            wxMessageBox(error, "Save Error", wxOK | wxICON_ERROR);
+        auto res = rz::json::WriteObjToJsonFile(saveFromWidgets(), *currentSavePath, 0, [](std::string_view error){
+            wxMessageBox(std::string(error), "Save Error", wxOK | wxICON_ERROR);
         });
         if(res == rz::STATUS::RZ_SUCCESS){
             appCfg->saveNextRecent(path.string());
